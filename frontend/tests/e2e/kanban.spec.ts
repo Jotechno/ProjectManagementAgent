@@ -243,4 +243,94 @@ test.describe("Tablero Kanban MVP - Pruebas de Integración E2E", () => {
     );
     await expect(page.getByTestId("card-card-7")).not.toBeVisible();
   });
+
+  test("debe permitir usar el chat con IA para crear y mover tarjetas actualizando el tablero en vivo y persistiendo al recargar", async ({
+    page,
+  }) => {
+    await page.route("**/api/chat", async (route) => {
+      const updatedBoard = {
+        ...initialBoardData,
+        cards: {
+          ...initialBoardData.cards,
+          "card-ia-e2e": {
+            id: "card-ia-e2e",
+            title: "Despliegue automatizado con IA",
+            details: "Creada desde el asistente lateral",
+          },
+        },
+        columns: {
+          ...initialBoardData.columns,
+          "col-1": {
+            ...initialBoardData.columns["col-1"],
+            cardIds: initialBoardData.columns["col-1"].cardIds.filter(
+              (id) => id !== "card-1"
+            ),
+          },
+          "col-3": {
+            ...initialBoardData.columns["col-3"],
+            cardIds: [
+              ...initialBoardData.columns["col-3"].cardIds,
+              "card-1",
+              "card-ia-e2e",
+            ],
+          },
+        },
+      };
+
+      await page.request.put("/api/board", { data: updatedBoard });
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          reply:
+            "He creado la tarjeta Despliegue automatizado con IA en En Progreso y movido Definir arquitectura de microservicios a En Progreso.",
+          updated_board: updatedBoard,
+        }),
+      });
+    });
+
+    // Verificar colapso y reapertura de la barra lateral de chat
+    await expect(page.getByTestId("chat-sidebar")).toBeVisible();
+    await page.getByTestId("chat-toggle-btn").click();
+    await expect(page.getByTestId("chat-sidebar-collapsed")).toBeVisible();
+    await page.getByTestId("chat-toggle-btn").click();
+    await expect(page.getByTestId("chat-sidebar")).toBeVisible();
+
+    // Enviar instrucción al chat de IA
+    await page
+      .getByTestId("chat-input")
+      .fill(
+        "Crea la tarjeta Despliegue automatizado con IA en En Progreso y mueve Definir arquitectura de microservicios a En Progreso"
+      );
+    await page.getByTestId("chat-send-btn").click();
+
+    // Verificar mensajes en el chat
+    await expect(page.getByTestId("chat-message-0")).toContainText(
+      "Crea la tarjeta Despliegue automatizado con IA"
+    );
+    await expect(page.getByTestId("chat-message-1")).toContainText(
+      "He creado la tarjeta Despliegue automatizado con IA en En Progreso"
+    );
+
+    // Verificar actualización inmediata del tablero en la interfaz sin recargar
+    const col3 = page.getByTestId("droppable-col-3");
+    await expect(col3).toContainText("Despliegue automatizado con IA");
+    await expect(col3.getByTestId("card-card-1")).toBeVisible();
+    await expect(page.getByTestId("column-count-col-1")).toHaveText("1");
+    await expect(page.getByTestId("column-count-col-3")).toHaveText("3");
+    await expect(page.getByTestId("total-cards-badge")).toContainText(
+      "8 tarjetas activas"
+    );
+
+    // Verificar que persiste tras recargar la página
+    await page.reload();
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+    await expect(page.getByTestId("droppable-col-3")).toContainText(
+      "Despliegue automatizado con IA"
+    );
+    await expect(
+      page.getByTestId("droppable-col-3").getByTestId("card-card-1")
+    ).toBeVisible();
+  });
 });

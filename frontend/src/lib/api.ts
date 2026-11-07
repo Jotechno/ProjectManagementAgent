@@ -1,4 +1,6 @@
-import { BoardData } from "@/types/kanban";
+import { BoardData, ChatMessage, ChatResponse } from "@/types/kanban";
+
+export type { ChatMessage, ChatResponse };
 
 export interface AuthUser {
   username: string;
@@ -58,4 +60,26 @@ export async function saveBoard(board: BoardData): Promise<BoardData> {
   }
   return res.json();
 }
+
+export async function sendChatMessage(
+  message: string,
+  history: ChatMessage[] = []
+): Promise<ChatResponse> {
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ message, history }),
+  });
+
+  if (!res || !res.ok) {
+    const errData = res ? await res.json().catch(() => null) : null;
+    throw new Error(
+      errData?.detail || "No se pudo obtener respuesta del asistente de IA."
+    );
+  }
+
+  return res.json();
+}
+
 

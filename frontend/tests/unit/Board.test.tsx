@@ -1,9 +1,15 @@
-import { describe, it, expect } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { Board } from "@/components/Board";
+import { initialBoardData } from "@/data/initialData";
+import { BoardData } from "@/types/kanban";
 
 describe("Board UI - Pruebas Unitarias de Componentes", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
   it("renderiza el encabezado y las 5 columnas fijas con sus datos iniciales", () => {
     render(<Board />);
 
@@ -88,5 +94,57 @@ describe("Board UI - Pruebas Unitarias de Componentes", () => {
 
     expect(screen.getByText("Título editado en test")).toBeInTheDocument();
     expect(screen.getByText("Detalles editados en test")).toBeInTheDocument();
+  });
+
+  it("actualiza las tarjetas renderizadas inmediatamente cuando el chat con IA devuelve updated_board", async () => {
+    const aiUpdatedBoard: BoardData = {
+      ...initialBoardData,
+      cards: {
+        ...initialBoardData.cards,
+        "card-ia-live": {
+          id: "card-ia-live",
+          title: "Automatización creada por IA",
+          details: "Sincronizada en tiempo real con el tablero",
+        },
+      },
+      columns: {
+        ...initialBoardData.columns,
+        "col-2": {
+          ...initialBoardData.columns["col-2"],
+          cardIds: [
+            ...initialBoardData.columns["col-2"].cardIds,
+            "card-ia-live",
+          ],
+        },
+      },
+    };
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        reply: "He añadido la tarjeta Automatización creada por IA en Por Hacer.",
+        updated_board: aiUpdatedBoard,
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Board />);
+
+    fireEvent.change(screen.getByTestId("chat-input"), {
+      target: { value: "Añade Automatización creada por IA en Por Hacer" },
+    });
+    fireEvent.click(screen.getByTestId("chat-send-btn"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Automatización creada por IA")
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText("Sincronizada en tiempo real con el tablero")
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("total-cards-badge")).toHaveTextContent(
+      "8 tarjetas activas"
+    );
   });
 });

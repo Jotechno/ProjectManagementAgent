@@ -20,3 +20,13 @@ export interface DragLocation {
   droppableId: string;
   index: number;
 }
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatResponse {
+  reply: string;
+  updated_board: BoardData | null;
+}

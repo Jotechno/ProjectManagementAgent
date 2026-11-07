@@ -1,50 +1,72 @@
-# Gestor de Proyectos Kanban
+# Gestor de Proyectos Kanban MVP
 
-Aplicación MVP para organizar proyectos en un tablero Kanban. Incluye una interfaz Next.js y un backend FastAPI, empaquetados en Docker.
+Aplicación de gestión de proyectos con tablero Kanban interactivo, persistencia en SQLite y asistente de IA integrado mediante Google Gemini (`gemini-3.8-flash`). El frontend (Next.js estático) y el backend (FastAPI) se empaquetan y sirven desde un único contenedor Docker en `http://localhost:8000`.
 
-## Funcionalidades disponibles
+## Características principales
 
-- Inicio de sesión de demostración.
-- Tablero Kanban con columnas renombrables.
-- Creación, edición, eliminación y movimiento de tarjetas.
-
-La autenticación utiliza las credenciales `user` y `password`. El tablero todavía no se guarda de forma persistente. La integración con SQLite y el chat con IA están pendientes.
+- Inicio de sesión con sesión firmada (`HttpOnly` cookie). Credenciales por defecto: usuario `user`, contraseña `password`.
+- Tablero Kanban con 5 columnas fijas renombrables.
+- Creación, edición, eliminación y movimiento (`drag and drop`) de tarjetas sincronizados con SQLite.
+- Barra lateral de chat con IA (`gemini-3.8-flash`) capaz de responder preguntas y crear, editar, mover o eliminar tarjetas del tablero en tiempo real.
 
 ## Requisitos
 
-- Docker
-- Docker Compose no es necesario
+- Docker instalado y en ejecución.
+- Archivo `.env` en la raíz del proyecto con la clave de API de Gemini:
 
-## Inicio y parada
+```env
+GEMINI_API_KEY=tu_clave_de_gemini
+```
 
-En Windows, desde la raíz del proyecto:
+## Inicio y detención del servidor
+
+### Windows (CMD o PowerShell)
 
 ```bat
 scripts\start.bat
 scripts\stop.bat
 ```
 
-En macOS o Linux:
+O directamente con PowerShell:
 
-```bash
-bash scripts/start.sh
-bash scripts/stop.sh
+```powershell
+.\scripts\start.ps1
+.\scripts\stop.ps1
 ```
 
-La aplicación estará disponible en <http://localhost:8000>. Los scripts cargan el archivo `.env` si existe; la clave de Gemini no es necesaria para iniciar la versión actual.
+### macOS y Linux
 
-## Pruebas
+```bash
+./scripts/start.sh
+./scripts/stop.sh
+```
 
-Frontend:
+Una vez iniciado el contenedor (`pm-kanban-app`), la aplicación estará disponible en `http://localhost:8000` y la base de datos SQLite se persistirá en `./data/pm.db`.
+
+## Ejecución de pruebas
+
+### Pruebas unitarias de frontend (Vitest)
 
 ```bash
 cd frontend
 npm test
 ```
 
-Backend:
+### Pruebas unitarias e integración de backend (Pytest en contenedor)
 
 ```bash
-cd backend
-uv run pytest
+docker exec pm-kanban-app pytest -k "not test_real_gemini"
+```
+
+Para incluir las pruebas contra el servicio en vivo de Gemini:
+
+```bash
+docker exec pm-kanban-app pytest
+```
+
+### Pruebas E2E (Playwright contra el contenedor en `http://localhost:8000`)
+
+```bash
+cd frontend
+PLAYWRIGHT_BASE_URL=http://localhost:8000 npm run test:e2e
 ```

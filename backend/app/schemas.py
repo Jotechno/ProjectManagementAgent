@@ -1,3 +1,4 @@
+from typing import Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 FIXED_COLUMNS = ["col-1", "col-2", "col-3", "col-4", "col-5"]
@@ -79,3 +80,47 @@ class BoardDataSchema(BaseModel):
 
         return self
 
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1)
+
+    @field_validator("content")
+    @classmethod
+    def content_must_not_be_blank(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("El contenido del mensaje no puede estar vacío")
+        return trimmed
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1)
+    history: list[ChatMessage] = Field(default_factory=list)
+
+    @field_validator("message")
+    @classmethod
+    def message_must_not_be_blank(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("El mensaje no puede estar vacío")
+        return trimmed
+
+
+class AIChatOutput(BaseModel):
+    reply: str = Field(
+        min_length=1,
+        description="Respuesta en español para el usuario.",
+    )
+    updated_board: BoardDataSchema | None = Field(
+        default=None,
+        description="Tablero Kanban completo actualizado si el usuario pidió cambios; null si solo es conversación o consulta.",
+    )
+
+    @field_validator("reply")
+    @classmethod
+    def reply_must_not_be_blank(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("La respuesta de la IA no puede estar vacía")
+        return trimmed

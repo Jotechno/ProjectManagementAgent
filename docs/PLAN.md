@@ -202,15 +202,15 @@ Configurar la integración del backend con Google Gemini (`gemini-3.8-flash`) us
 Ampliar el servicio de IA para recibir el JSON actual del tablero Kanban, el mensaje del usuario y el historial de conversación, devolviendo Salidas Estructuradas con la respuesta textual y, opcionalmente, el tablero Kanban actualizado.
 
 ### Lista de verificación
-- [ ] 9.1 Definir esquemas Pydantic en `backend/app/schemas.py`:
+- [x] 9.1 Definir esquemas Pydantic en `backend/app/schemas.py`:
   - `ChatMessage` (`role`: `"user" | "assistant"`, `content`: `str`)
   - `ChatRequest` (`message`: `str`, `history`: `list[ChatMessage] = []`)
   - `AIChatOutput` (`reply`: `str`, `updated_board`: `BoardDataSchema | None = None`)
-- [ ] 9.2 Implementar en `backend/app/ai.py` la llamada a `gemini-3.8-flash` con Salidas Estructuradas (`AIChatOutput`) e instrucciones de sistema claras:
+- [x] 9.2 Implementar en `backend/app/ai.py` la llamada a `gemini-3.8-flash` con Salidas Estructuradas (`AIChatOutput`) e instrucciones de sistema claras:
   - Incluir siempre el JSON vigente del tablero del usuario y el historial de conversación.
   - Si el usuario solo hace una pregunta o conversa, responder en `reply` y devolver `updated_board = null`.
   - Si el usuario solicita crear, editar, mover, eliminar tarjetas o renombrar columnas (una o varias acciones a la vez), devolver en `updated_board` el estado completo consistente del tablero manteniendo las 5 columnas en `columnOrder`.
-- [ ] 9.3 Crear endpoint `POST /api/chat` autenticado:
+- [x] 9.3 Crear endpoint `POST /api/chat` autenticado:
   - Obtiene el tablero actual del usuario desde SQLite.
   - Invoca al servicio Gemini.
   - Si `updated_board` no es nulo, valida integridad con `BoardDataSchema` y guarda el nuevo tablero en SQLite automáticamente.
@@ -234,13 +234,13 @@ Ampliar el servicio de IA para recibir el JSON actual del tablero Kanban, el men
 Añadir un widget lateral en la interfaz de usuario para chatear con la IA y reflejar automáticamente en el tablero cualquier actualización del Kanban devuelta por el modelo.
 
 ### Lista de verificación
-- [ ] 10.1 Añadir función `sendChatMessage(message, history)` en `frontend/src/lib/api.ts`.
-- [ ] 10.2 Crear componente `frontend/src/components/ChatSidebar.tsx` siguiendo la paleta de colores del proyecto:
+- [x] 10.1 Añadir función `sendChatMessage(message, history)` en `frontend/src/lib/api.ts`.
+- [x] 10.2 Crear componente `frontend/src/components/ChatSidebar.tsx` siguiendo la paleta de colores del proyecto:
   - Panel lateral colapsable/expandible integrado limpiamente junto al tablero Kanban.
   - Lista desplazable de mensajes (usuario y asistente), estado "Pensando..." durante la petición y manejo claro de errores.
   - Campo de entrada con envío mediante `Enter` y botón de acción en púrpura secundario (`#753991`).
-- [ ] 10.3 Integrar `ChatSidebar` en `Board.tsx`: cuando la respuesta de `POST /api/chat` incluya `updated_board`, invocar `replaceBoard(response.updated_board)` para actualizar el tablero instantáneamente sin recargar.
-- [ ] 10.4 Redactar un `README.md` conciso en la raíz (requisitos, `.env`, cómo iniciar/detener con `scripts/` y cómo ejecutar pruebas) y actualizar `backend/AGENTS.md` y `frontend/AGENTS.md` con el estado final, verificando ausencia total de emojis.
+- [x] 10.3 Integrar `ChatSidebar` en `Board.tsx`: cuando la respuesta de `POST /api/chat` incluya `updated_board`, invocar `replaceBoard(response.updated_board)` para actualizar el tablero instantáneamente sin recargar.
+- [x] 10.4 Redactar un `README.md` conciso en la raíz (requisitos, `.env`, cómo iniciar/detener con `scripts/` y cómo ejecutar pruebas) y actualizar `backend/AGENTS.md` y `frontend/AGENTS.md` con el estado final, verificando ausencia total de emojis.
 
 ### Pruebas
 - Pruebas unitarias de frontend (`Vitest`):

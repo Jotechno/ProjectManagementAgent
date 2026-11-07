@@ -8,6 +8,7 @@ import { initialBoardData } from "@/data/initialData";
 import { Header } from "@/components/Header";
 import { Column } from "@/components/Column";
 import { NewCardModal } from "@/components/NewCardModal";
+import { ChatSidebar } from "@/components/ChatSidebar";
 
 interface BoardProps {
   username?: string;
@@ -23,6 +24,7 @@ export function Board({
   const {
     board,
     error,
+    replaceBoard,
     renameColumn,
     addCard,
     editCard,
@@ -73,46 +75,50 @@ export function Board({
         </div>
       )}
 
-      <main className="flex-1 max-w-[1600px] w-full mx-auto px-6 py-6 overflow-x-auto">
-        {mounted ? (
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <div
-              data-testid="kanban-board"
-              className="flex gap-5 items-start min-w-[1380px] lg:min-w-0"
-            >
-              {board.columnOrder.map((columnId) => {
-                const column = board.columns[columnId];
-                const cards = column.cardIds
-                  .map((cardId) => board.cards[cardId])
-                  .filter(Boolean);
-
-                return (
-                  <Column
-                    key={column.id}
-                    column={column}
-                    cards={cards}
-                    onRenameColumn={renameColumn}
-                    onOpenNewCardModal={(colId) =>
-                      setActiveModalColumnId(colId)
-                    }
-                    onEditCard={(card) => setEditingCard(card)}
-                    onDeleteCard={deleteCard}
-                  />
-                );
-              })}
-            </div>
-          </DragDropContext>
-        ) : (
-          <div className="flex gap-5 items-start">
-            {board.columnOrder.map((columnId) => (
+      <div className="flex-1 flex w-full max-w-[1920px] mx-auto overflow-hidden">
+        <main className="flex-1 px-6 py-6 overflow-x-auto">
+          {mounted ? (
+            <DragDropContext onDragEnd={handleDragEnd}>
               <div
-                key={columnId}
-                className="h-96 flex-1 bg-slate-100 rounded-2xl animate-pulse"
-              />
-            ))}
-          </div>
-        )}
-      </main>
+                data-testid="kanban-board"
+                className="flex gap-5 items-start min-w-[1380px] lg:min-w-0"
+              >
+                {board.columnOrder.map((columnId) => {
+                  const column = board.columns[columnId];
+                  const cards = column.cardIds
+                    .map((cardId) => board.cards[cardId])
+                    .filter(Boolean);
+
+                  return (
+                    <Column
+                      key={column.id}
+                      column={column}
+                      cards={cards}
+                      onRenameColumn={renameColumn}
+                      onOpenNewCardModal={(colId) =>
+                        setActiveModalColumnId(colId)
+                      }
+                      onEditCard={(card) => setEditingCard(card)}
+                      onDeleteCard={deleteCard}
+                    />
+                  );
+                })}
+              </div>
+            </DragDropContext>
+          ) : (
+            <div className="flex gap-5 items-start">
+              {board.columnOrder.map((columnId) => (
+                <div
+                  key={columnId}
+                  className="h-96 flex-1 bg-slate-100 rounded-2xl animate-pulse"
+                />
+              ))}
+            </div>
+          )}
+        </main>
+
+        <ChatSidebar onBoardUpdate={replaceBoard} />
+      </div>
 
       {activeModalColumn && (
         <NewCardModal

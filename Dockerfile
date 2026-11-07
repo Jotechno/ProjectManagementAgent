@@ -12,14 +12,14 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    DATABASE_PATH=/app/data/pm.db
+    DATABASE_PATH=/app/data/pm.db \
+    PATH="/app/backend/.venv/bin:$PATH"
 
 WORKDIR /app/backend
 
 COPY backend/pyproject.toml ./
-RUN uv sync --no-dev
+RUN UV_COMPILE_BYTECODE=1 uv sync
 
 COPY backend/ ./
 RUN rm -rf /app/backend/static
@@ -28,4 +28,4 @@ RUN mkdir -p /app/data
 
 EXPOSE 8000
 
-CMD ["uv", "run", "--no-dev", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
