@@ -101,12 +101,12 @@ Requerir inicio de sesión con las credenciales fijas `user` y `password` al acc
 Proponer el esquema de base de datos SQLite y el esquema JSON del tablero Kanban, documentarlos en `docs/` y obtener la aprobación del usuario antes de implementar las rutas de persistencia.
 
 ### Lista de verificación
-- [ ] 5.1 Definir esquema SQLite relacional simple preparado para múltiples usuarios:
+- [x] 5.1 Definir esquema SQLite relacional simple preparado para múltiples usuarios:
   - Tabla `users`: `id` (INTEGER PK), `username` (TEXT UNIQUE NOT NULL), `password_hash` (TEXT NOT NULL), `created_at` (TEXT NOT NULL).
   - Tabla `boards`: `id` (INTEGER PK), `user_id` (INTEGER UNIQUE NOT NULL REFERENCES `users(id)`), `board_json` (TEXT NOT NULL), `updated_at` (TEXT NOT NULL).
-- [ ] 5.2 Crear `docs/kanban_schema.json` con el JSON Schema formal de `BoardData` (`columnOrder`, `columns`, `cards`) almacenado en `boards.board_json`.
-- [ ] 5.3 Crear `docs/DATABASE.md` explicando el diseño de tablas, relación usuario-tablero (1 tablero por usuario en MVP, extensible a múltiples usuarios/tableros), inicialización automática si el archivo SQLite no existe y datos semilla del usuario `user`.
-- [ ] 5.4 Presentar `docs/kanban_schema.json` y `docs/DATABASE.md` al usuario y obtener su aprobación antes de continuar a la Parte 6.
+- [x] 5.2 Crear `docs/kanban_schema.json` con el JSON Schema formal de `BoardData` (`columnOrder`, `columns`, `cards`) almacenado en `boards.board_json`.
+- [x] 5.3 Crear `docs/DATABASE.md` explicando el diseño de tablas, relación usuario-tablero (1 tablero por usuario en MVP, extensible a múltiples usuarios/tableros), inicialización automática si el archivo SQLite no existe y datos semilla del usuario `user`.
+- [x] 5.4 Presentar `docs/kanban_schema.json` y `docs/DATABASE.md` al usuario y obtener su aprobación antes de continuar a la Parte 6.
 
 ### Pruebas y validación
 - Validar que el objeto `initialBoardData` cumple íntegramente con `docs/kanban_schema.json`.
@@ -121,10 +121,10 @@ Proponer el esquema de base de datos SQLite y el esquema JSON del tablero Kanban
 Implementar la capa SQLite con creación automática de base de datos y las rutas API para leer y modificar el tablero Kanban de un usuario autenticado.
 
 ### Lista de verificación
-- [ ] 6.1 Implementar `backend/app/db.py` usando `sqlite3` con creación automática del directorio/archivo (`DATABASE_PATH`, por defecto `data/pm.db`), creación de tablas `users` y `boards`, y creación idempotente del usuario `user` (contraseña hasheada) junto con su tablero Kanban por defecto al iniciar la aplicación (`lifespan`).
-- [ ] 6.2 Implementar modelos Pydantic en `backend/app/schemas.py` (`CardSchema`, `ColumnSchema`, `BoardDataSchema`) validando que `columnOrder` preserve las 5 columnas fijas y que todos los `cardIds` correspondan biunívocamente con las claves de `cards`.
-- [ ] 6.3 Actualizar las rutas de autenticación (`backend/app/auth.py`) para verificar credenciales contra la tabla `users` en SQLite y resolver el `user_id` de la sesión activa.
-- [ ] 6.4 Implementar endpoints protegidos:
+- [x] 6.1 Implementar `backend/app/db.py` usando `sqlite3` con creación automática del directorio/archivo (`DATABASE_PATH`, por defecto `data/pm.db`), creación de tablas `users` y `boards`, y creación idempotente del usuario `user` (contraseña hasheada) junto con su tablero Kanban por defecto al iniciar la aplicación (`lifespan`).
+- [x] 6.2 Implementar modelos Pydantic en `backend/app/schemas.py` (`CardSchema`, `ColumnSchema`, `BoardDataSchema`) validando que `columnOrder` preserve las 5 columnas fijas y que todos los `cardIds` correspondan biunívocamente con las claves de `cards`.
+- [x] 6.3 Actualizar las rutas de autenticación (`backend/app/auth.py`) para verificar credenciales contra la tabla `users` en SQLite y resolver el `user_id` de la sesión activa.
+- [x] 6.4 Implementar endpoints protegidos:
   - `GET /api/board`: retorna el `BoardData` del usuario autenticado.
   - `PUT /api/board`: valida el `BoardDataSchema` recibido y actualiza `boards.board_json` y `updated_at` para ese usuario.
 

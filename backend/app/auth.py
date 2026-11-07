@@ -1,8 +1,10 @@
 import hashlib
 import hmac
 import os
+from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
+from app.db import authenticate_user, get_user_by_username
 
 COOKIE_NAME = "pm_session"
 DEFAULT_SECRET = "pm-mvp-local-session-secret"
@@ -44,7 +46,7 @@ def verify_session_token(token: str) -> str | None:
     return username
 
 
-def get_current_username(request: Request) -> str:
+def get_current_user(request: Request) -> dict[str, Any]:
     token = request.cookies.get(COOKIE_NAME)
     if not token:
         raise HTTPException(
@@ -57,18 +59,29 @@ def get_current_username(request: Request) -> str:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Sesión inválida",
         )
-    return username
+    user = get_user_by_username(username)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario no encontrado",
+        )
+    return user
+
+
+def get_current_username(user: dict[str, Any] = Depends(get_current_user)) -> str:
+    return str(user["username"])
 
 
 @router.post("/login", response_model=UserResponse)
 def login(payload: LoginRequest, response: Response) -> UserResponse:
-    if payload.username != "user" or payload.password != "password":
+    user = authenticate_user(payload.username, payload.password)
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales inválidas",
         )
 
-    token = create_session_token(payload.username)
+    token = create_session_token(user["username"])
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
@@ -76,7 +89,7 @@ def login(payload: LoginRequest, response: Response) -> UserResponse:
         samesite="lax",
         path="/",
     )
-    return UserResponse(username=payload.username)
+    return UserResponse(username=user["username"])
 
 
 @router.post("/logout")
@@ -88,4 +101,3 @@ def logout(response: Response) -> dict[str, str]:
 @router.get("/me", response_model=UserResponse)
 def get_me(username: str = Depends(get_current_username)) -> UserResponse:
     return UserResponse(username=username)
-
