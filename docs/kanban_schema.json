@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pm-mvp.local/schemas/kanban_board.json",
+  "title": "BoardData",
+  "description": "Esquema JSON del tablero Kanban almacenado por usuario en boards.board_json (SQLite).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["columnOrder", "columns", "cards"],
+  "properties": {
+    "columnOrder": {
+      "description": "Orden fijo de las 5 columnas del tablero Kanban.",
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "columns": {
+      "description": "Diccionario de columnas indexado por su identificador (ej. col-1..col-5).",
+      "type": "object",
+      "minProperties": 5,
+      "maxProperties": 5,
+      "additionalProperties": {
+        "$ref": "#/$defs/Column"
+      }
+    },
+    "cards": {
+      "description": "Diccionario de tarjetas del tablero indexado por su identificador.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Card"
+      }
+    }
+  },
+  "$defs": {
+    "Column": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "cardIds"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cardIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "Card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "details"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "details": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "columnOrder": ["col-1", "col-2", "col-3", "col-4", "col-5"],
+      "columns": {
+        "col-1": { "id": "col-1", "title": "Backlog", "cardIds": ["card-1"] },
+        "col-2": { "id": "col-2", "title": "Por Hacer", "cardIds": [] },
+        "col-3": { "id": "col-3", "title": "En Progreso", "cardIds": [] },
+        "col-4": { "id": "col-4", "title": "En Revisión", "cardIds": [] },
+        "col-5": { "id": "col-5", "title": "Completado", "cardIds": [] }
+      },
+      "cards": {
+        "card-1": {
+          "id": "card-1",
+          "title": "Definir arquitectura de microservicios",
+          "details": "Evaluar límites de dominio y contratos de comunicación."
+        }
+      }
+    }
+  ]
+}
+
