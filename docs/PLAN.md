@@ -1,6 +1,21 @@
 # Plan de Ejecución del Proyecto - Gestor de Proyectos Kanban MVP
 
-Este documento detalla los pasos de implementación, pruebas y criterios de éxito para construir y empaquetar el MVP completo según las especificaciones de `AGENTS.md`.
+Este documento detalla los pasos de implementación, las decisiones de diseño adoptadas, las pruebas y los criterios de éxito para construir y empaquetar el MVP completo según las especificaciones de `AGENTS.md`.
+
+---
+
+## Decisiones de Diseño Clave Adoptadas
+
+1. **Proveedor y Modelo de IA**: Uso del SDK oficial `google-genai` con el modelo `gemini-3.8-flash` y `GEMINI_API_KEY` cargada desde `.env` en la raíz (reemplazando la referencia original a OpenRouter).
+2. **Empaquetado Unificado en Docker**: Construcción multi-etapa en `Dockerfile` (`node:22-alpine` para `next build` con `output: "export"` hacia `frontend/out/`, y `python:3.12-slim` con `uv` para FastAPI sirviendo los estáticos en `/`). `backend/app/main.py` resuelve dinámicamente `frontend/out` en entorno local o `backend/static` dentro del contenedor.
+3. **Modal Unificado para Creación y Edición de Tarjetas**: En lugar de duplicar componentes, `NewCardModal.tsx` soporta modo creación y modo edición (`editingCard`, `onEdit`), conservando intactos los `data-testid` originales y añadiendo identificadores específicos (`edit-card-*`) para edición.
+4. **Autenticación Sin Dependencias Externas Pesadas**: Cookie `HttpOnly` (`pm_session`, `SameSite=Lax`) firmada con HMAC-SHA256 en `backend/app/auth.py` y almacenamiento de contraseñas en SQLite mediante `hashlib.pbkdf2_hmac` (SHA-256, 100,000 iteraciones y sal aleatoria) en `backend/app/db.py`.
+5. **Modelo Híbrido en SQLite (`users` + `boards`)**: Relación `1:1` en el MVP (`user_id UNIQUE` con `ON DELETE CASCADE`) preparada para múltiples usuarios, almacenando el estado del tablero en `board_json` validado estrictamente con `BoardDataSchema` (Pydantic) y documentado en `docs/kanban_schema.json` y `docs/DATABASE.md`.
+6. **Inicialización Idempotente y Aislamiento en Pruebas**: `init_db()` se ejecuta en el `lifespan` de FastAPI y al abrir conexión en `get_connection()`, creando automáticamente el directorio, el archivo SQLite (`DATABASE_PATH`) y el usuario semilla `user` (`password`) si no existen. En `backend/tests/conftest.py`, el fixture `isolated_sqlite_db` asigna una base de datos temporal por prueba.
+7. **Sincronización Frontend-Backend Libre de Condiciones de Carrera**:
+   - `HomePage` (`frontend/src/app/page.tsx`) obtiene primero el tablero persistido (`GET /api/board`) tras autenticar y lo entrega como `initialBoard` a `Board.tsx`, evitando parpadeos con datos iniciales al recargar la página.
+   - `useKanban.ts` aplica actualizaciones optimistas en memoria y sincroniza cada cambio mediante `PUT /api/board`, exponiendo `loadBoard`, `replaceBoard`, `isLoading` y `error`.
+   - En pruebas E2E (`playwright.config.ts`), se utiliza ejecución en serie (`workers: 1`) restableciendo el tablero mediante la API real en `beforeEach` para evitar colisiones concurrentes en SQLite.
 
 ---
 
@@ -29,14 +44,14 @@ Enriquecer este documento con subpasos detallados en listas de verificación, pr
 Configurar la infraestructura de Docker, el backend en `backend/` con FastAPI gestionado con `uv`, y los scripts de inicio y parada en `scripts/`. Servir inicialmente un HTML estático de ejemplo en `/` que confirme funcionamiento local y realice una llamada a la API.
 
 ### Lista de verificación
-- [x] 2.1 Inicializar proyecto Python en `backend/pyproject.toml` para gestión con `uv` (dependencias: `fastapi`, `uvicorn[standard]`, `python-dotenv`; desarrollo: `pytest`, `httpx`).
+- [x] 2.1 Inicializar proyecto Python en `backend/pyproject.toml` para gestión con `uv` (dependencias: `fastapi`, `uvicorn[standard]`, `python-dotenv`; grupo `dev`: `pytest`, `httpx`).
 - [x] 2.2 Crear `backend/app/main.py` con rutas `GET /api/health` y `GET /api/hello`, y montaje estático inicial (`backend/static/index.html`) en `/` que muestre "Hola Mundo" y consulte `GET /api/hello` mediante `fetch`.
-- [x] 2.3 Crear `Dockerfile` en la raíz usando `uv` para instalar dependencias, exponiendo el puerto `8000` y ejecutando Uvicorn en `0.0.0.0:8000`, junto con `.dockerignore`.
+- [x] 2.3 Crear `Dockerfile` en la raíz usando `uv` para instalar dependencias, exponiendo el puerto `8000` y ejecutando Uvicorn en `0.0.0.0:8000`, junto con `.dockerignore` y reglas de `.gitignore` para `data/` y archivos `.db`.
 - [x] 2.4 Crear scripts de inicio y parada para Windows, Mac y Linux en `scripts/`:
-  - `scripts/start.ps1` y `scripts/stop.ps1` (Windows PowerShell)
+  - `scripts/start.ps1` y `scripts/stop.ps1` (Windows PowerShell, con validación de `$LASTEXITCODE` y espera activa sobre `/api/health`)
   - `scripts/start.bat` y `scripts/stop.bat` (Windows CMD)
   - `scripts/start.sh` y `scripts/stop.sh` (Mac / Linux)
-  Los scripts construirán/ejecutarán el contenedor cargando `.env`, mapeando el puerto `8000` y montando un volumen/directorio `data/` para persistir SQLite.
+  Los scripts construyen y ejecutan el contenedor `pm-kanban-app` cargando `.env`, mapeando el puerto `8000` y montando `data/` en `/app/data`.
 - [x] 2.5 Actualizar `backend/AGENTS.md` y `scripts/AGENTS.md` con la descripción de los componentes creados.
 
 ### Pruebas
@@ -58,7 +73,7 @@ Compilar el frontend Next.js de forma estática y servirlo desde FastAPI en `/`,
 - [x] 3.1 Actualizar `frontend/next.config.ts` con `output: "export"` para generar los archivos estáticos en `frontend/out/`.
 - [x] 3.2 Añadir edición manual de tarjetas (título y detalles):
   - Agregar acción `editCard(cardId, title, details)` en `frontend/src/hooks/useKanban.ts`.
-  - Añadir botón de edición en `CardItem.tsx` y soporte de modo edición/creación en el modal de tarjeta (`CardModal.tsx` o extensión limpia de `NewCardModal.tsx`) conectado a `Column.tsx` y `Board.tsx`.
+  - Añadir botón de edición en `CardItem.tsx` y soporte de modo edición/creación en `NewCardModal.tsx` conectado a `Column.tsx` y `Board.tsx`.
 - [x] 3.3 Actualizar `Dockerfile` a construcción multi-etapa:
   - Etapa 1 (`node:22-alpine`): instala dependencias de `frontend/` y ejecuta `npm run build` generando `frontend/out/`.
   - Etapa 2 (`python:3.12-slim` + `uv`): instala `backend/` y copia `frontend/out/` a `backend/static/` para ser servido por FastAPI con `StaticFiles(directory=..., html=True)` después de las rutas `/api/*`.
@@ -66,7 +81,7 @@ Compilar el frontend Next.js de forma estática y servirlo desde FastAPI en `/`,
 ### Pruebas
 - Pruebas unitarias de frontend (`npm test` con Vitest): ampliar `useKanban.test.ts` y `Board.test.tsx` para cubrir `editCard` y validación de título vacío al editar.
 - Pruebas unitarias de backend (`pytest`): confirmar que `/api/health` responde JSON y `/` entrega el HTML exportado de Next.js.
-- Pruebas E2E con Playwright (`kanban.spec.ts`): ejecutar contra la aplicación servida en Docker (`http://localhost:8000`) validando las 5 columnas, renombrado, creación, edición, eliminación y drag & drop de tarjetas.
+- Pruebas E2E con Playwright (`kanban.spec.ts` usando `PLAYWRIGHT_BASE_URL=http://localhost:8000`): ejecutar contra la aplicación servida en Docker validando las 5 columnas, renombrado, creación, edición, eliminación y drag & drop de tarjetas.
 
 ### Criterios de éxito
 - El contenedor Docker único compila el frontend y lo sirve en `http://localhost:8000/`.
@@ -80,15 +95,15 @@ Compilar el frontend Next.js de forma estática y servirlo desde FastAPI en `/`,
 Requerir inicio de sesión con las credenciales fijas `user` y `password` al acceder a `/` por primera vez para visualizar el tablero Kanban, e incluir opción de cerrar sesión.
 
 ### Lista de verificación
-- [x] 4.1 Implementar rutas de autenticación en el backend (`POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`) usando una cookie de sesión `HttpOnly` firmada simple, validando inicialmente `username == "user"` y `password == "password"`.
+- [x] 4.1 Implementar rutas de autenticación en `backend/app/auth.py` (`POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`) usando una cookie de sesión `HttpOnly` (`pm_session`) firmada con HMAC-SHA256.
 - [x] 4.2 Crear componente `frontend/src/components/LoginForm.tsx` aplicando la paleta de colores definida en `AGENTS.md` (`#032147` encabezados, `#753991` botón de ingreso, `#209dd7` focos/enlaces, `#ecad0a` acento superior, `#888888` etiquetas).
-- [x] 4.3 Actualizar `Header.tsx` para mostrar el usuario autenticado y un botón "Cerrar sesión" (`data-testid="logout-btn"`).
+- [x] 4.3 Actualizar `Header.tsx` para mostrar el usuario autenticado (`logged-in-user`) y un botón "Cerrar sesión" (`data-testid="logout-btn"`).
 - [x] 4.4 Actualizar `page.tsx` para consultar el estado de sesión al cargar: mostrar `LoginForm` si no hay sesión activa y mostrar `Board` únicamente tras autenticarse.
 
 ### Pruebas
-- Pruebas unitarias de backend (`pytest`): login válido (`200` + cookie), credenciales inválidas (`401`), verificación de `/api/auth/me` con y sin sesión, y limpieza de sesión en `/api/auth/logout`.
-- Pruebas unitarias de frontend (`Vitest`): renderizado de `LoginForm`, mensaje de error ante credenciales inválidas y transición al tablero al iniciar sesión.
-- Pruebas E2E (`Playwright`): actualizar `beforeEach` de pruebas del tablero para iniciar sesión, y añadir suite `auth.spec.ts` probando bloqueo sin sesión, login fallido, login exitoso con `user`/`password`, persistencia tras recargar página y cierre de sesión.
+- Pruebas unitarias de backend (`backend/tests/test_auth.py`): login válido (`200` + cookie), credenciales inválidas (`401`), rechazo de cookie adulterada (`401`), verificación de `/api/auth/me` y limpieza de sesión en `/api/auth/logout`.
+- Pruebas unitarias de frontend (`frontend/tests/unit/Auth.test.tsx`): renderizado de `LoginForm`, mensaje de error ante credenciales inválidas, transición al tablero al iniciar sesión y cierre de sesión.
+- Pruebas E2E (`frontend/tests/e2e/auth.spec.ts` y `kanban.spec.ts`): bloqueo sin sesión, login fallido, login exitoso con `user`/`password`, persistencia tras recargar página y cierre de sesión.
 
 ### Criterios de éxito
 - Ningún usuario no autenticado puede ver el tablero Kanban en `/`.
@@ -103,13 +118,13 @@ Proponer el esquema de base de datos SQLite y el esquema JSON del tablero Kanban
 ### Lista de verificación
 - [x] 5.1 Definir esquema SQLite relacional simple preparado para múltiples usuarios:
   - Tabla `users`: `id` (INTEGER PK), `username` (TEXT UNIQUE NOT NULL), `password_hash` (TEXT NOT NULL), `created_at` (TEXT NOT NULL).
-  - Tabla `boards`: `id` (INTEGER PK), `user_id` (INTEGER UNIQUE NOT NULL REFERENCES `users(id)`), `board_json` (TEXT NOT NULL), `updated_at` (TEXT NOT NULL).
-- [x] 5.2 Crear `docs/kanban_schema.json` con el JSON Schema formal de `BoardData` (`columnOrder`, `columns`, `cards`) almacenado en `boards.board_json`.
-- [x] 5.3 Crear `docs/DATABASE.md` explicando el diseño de tablas, relación usuario-tablero (1 tablero por usuario en MVP, extensible a múltiples usuarios/tableros), inicialización automática si el archivo SQLite no existe y datos semilla del usuario `user`.
+  - Tabla `boards`: `id` (INTEGER PK), `user_id` (INTEGER UNIQUE NOT NULL REFERENCES `users(id)` ON DELETE CASCADE), `board_json` (TEXT NOT NULL), `updated_at` (TEXT NOT NULL).
+- [x] 5.2 Crear `docs/kanban_schema.json` con el JSON Schema formal (Draft 2020-12) de `BoardData` (`columnOrder`, `columns`, `cards`) almacenado en `boards.board_json`.
+- [x] 5.3 Crear `docs/DATABASE.md` explicando el diseño de tablas, relación usuario-tablero (1 tablero por usuario en MVP, extensible a múltiples usuarios/tableros), reglas de integridad e inicialización automática con datos semilla del usuario `user`.
 - [x] 5.4 Presentar `docs/kanban_schema.json` y `docs/DATABASE.md` al usuario y obtener su aprobación antes de continuar a la Parte 6.
 
 ### Pruebas y validación
-- Validar que el objeto `initialBoardData` cumple íntegramente con `docs/kanban_schema.json`.
+- Validar programáticamente que el esquema y ejemplo de `docs/kanban_schema.json` coinciden con `initialBoardData`.
 
 ### Criterios de éxito
 - `docs/kanban_schema.json` y `docs/DATABASE.md` completados y aprobados por el usuario.
@@ -121,24 +136,24 @@ Proponer el esquema de base de datos SQLite y el esquema JSON del tablero Kanban
 Implementar la capa SQLite con creación automática de base de datos y las rutas API para leer y modificar el tablero Kanban de un usuario autenticado.
 
 ### Lista de verificación
-- [x] 6.1 Implementar `backend/app/db.py` usando `sqlite3` con creación automática del directorio/archivo (`DATABASE_PATH`, por defecto `data/pm.db`), creación de tablas `users` y `boards`, y creación idempotente del usuario `user` (contraseña hasheada) junto con su tablero Kanban por defecto al iniciar la aplicación (`lifespan`).
-- [x] 6.2 Implementar modelos Pydantic en `backend/app/schemas.py` (`CardSchema`, `ColumnSchema`, `BoardDataSchema`) validando que `columnOrder` preserve las 5 columnas fijas y que todos los `cardIds` correspondan biunívocamente con las claves de `cards`.
-- [x] 6.3 Actualizar las rutas de autenticación (`backend/app/auth.py`) para verificar credenciales contra la tabla `users` en SQLite y resolver el `user_id` de la sesión activa.
-- [x] 6.4 Implementar endpoints protegidos:
+- [x] 6.1 Implementar `backend/app/db.py` usando `sqlite3` con creación automática del directorio/archivo (`DATABASE_PATH`, por defecto `data/pm.db`), creación de tablas `users` y `boards`, y creación idempotente del usuario `user` (contraseña hasheada con PBKDF2-HMAC-SHA256) junto con su tablero Kanban por defecto al iniciar la aplicación (`lifespan` y `get_connection`).
+- [x] 6.2 Implementar modelos Pydantic en `backend/app/schemas.py` (`CardSchema`, `ColumnSchema`, `BoardDataSchema`) validando que `columnOrder` preserve las 5 columnas fijas (`col-1`..`col-5`), que no existan títulos vacíos y que todos los `cardIds` correspondan biunívocamente con las claves de `cards`.
+- [x] 6.3 Actualizar las rutas de autenticación (`backend/app/auth.py`) para verificar credenciales contra la tabla `users` en SQLite (`authenticate_user`) y resolver el usuario activo (`get_current_user`).
+- [x] 6.4 Implementar endpoints protegidos en `backend/app/board.py`:
   - `GET /api/board`: retorna el `BoardData` del usuario autenticado.
   - `PUT /api/board`: valida el `BoardDataSchema` recibido y actualiza `boards.board_json` y `updated_at` para ese usuario.
 
 ### Pruebas
-- Pruebas unitarias exhaustivas en `backend/tests/test_board_api.py` con archivo SQLite temporal por prueba:
+- Pruebas unitarias exhaustivas en `backend/tests/test_board_api.py` con base de datos SQLite temporal aislada (`backend/tests/conftest.py`):
   - Creación automática del archivo `.db` cuando no existe.
   - Lectura inicial del tablero semilla tras login.
   - Actualización completa del tablero (renombrar columna, añadir, editar, mover y borrar tarjetas) y verificación de persistencia en lecturas posteriores.
-  - Rechazo con `401` sin sesión activa y `422` ante JSON inconsistente (ej. `cardIds` huérfanos o columnas faltantes).
-  - Aislamiento de datos creando un segundo usuario en BD y verificando que cada uno lee y modifica únicamente su propio tablero.
+  - Rechazo con `401` sin sesión activa y `422` ante JSON inconsistente (ej. `cardIds` huérfanos o `columnOrder` alterado).
+  - Aislamiento de datos creando un segundo usuario (`alice`) en BD y verificando que cada uno lee y modifica únicamente su propio tablero.
 
 ### Criterios de éxito
 - Si el archivo SQLite no existe al arrancar, se crea e inicializa automáticamente sin intervención manual.
-- `GET /api/board` y `PUT /api/board` funcionan con validación estricta y cobertura completa de pruebas unitarias.
+- `GET /api/board` y `PUT /api/board` funcionan con validación estricta y cobertura completa de pruebas unitarias (12/12 en `pytest`).
 
 ---
 
@@ -148,18 +163,18 @@ Conectar el frontend con la API del backend para que todas las operaciones sobre
 
 ### Lista de verificación
 - [x] 7.1 Crear módulo cliente `frontend/src/lib/api.ts` con funciones tipadas para autenticación (`login`, `logout`, `getMe`) y tablero (`fetchBoard`, `saveBoard`).
-- [x] 7.2 Actualizar `frontend/src/hooks/useKanban.ts` para:
-  - Cargar el tablero inicial desde `GET /api/board` al autenticarse.
+- [x] 7.2 Actualizar `frontend/src/hooks/useKanban.ts` y `frontend/src/app/page.tsx` para:
+  - Cargar el tablero inicial desde `GET /api/board` al autenticarse y pasarlo como `initialBoard` a `Board.tsx`.
   - Aplicar actualizaciones optimistas en las acciones `renameColumn`, `addCard`, `editCard`, `deleteCard` y `moveCard`, persistiendo cada cambio mediante `PUT /api/board`.
-  - Exponer `replaceBoard(newBoard)` para actualizaciones externas (como respuestas de IA en la Parte 10), estado `isLoading` y mensaje `error` en caso de fallo de red.
-- [x] 7.3 Mostrar estado de carga limpio y aviso discreto si ocurre un error de sincronización en `Board.tsx`.
+  - Exponer `loadBoard`, `replaceBoard(newBoard)` para actualizaciones externas (como respuestas de IA en la Parte 10), estado `isLoading` y mensaje `error` en caso de fallo de red.
+- [x] 7.3 Mostrar alerta discreta (`data-testid="board-sync-error"`) si ocurre un error de sincronización en `Board.tsx`.
 
 ### Pruebas
-- Pruebas unitarias de frontend (`Vitest`): mockear llamadas `fetch` a `/api/board` verificando carga inicial, disparo de `PUT /api/board` en cada operación del usuario y manejo de errores HTTP.
-- Pruebas de integración E2E (`Playwright`) contra el contenedor Docker con SQLite real: iniciar sesión, renombrar una columna, crear una tarjeta, editar otra, eliminar una y arrastrar otra de columna; recargar la página (`page.reload()`) y cerrar/abrir sesión confirmando que todos los cambios persisten.
+- Pruebas unitarias de frontend (`Vitest`, 20/20): mockear llamadas `fetch` a `/api/board` en `useKanban.test.ts` y `Auth.test.tsx` verificando carga inicial al iniciar sesión, disparo de `PUT /api/board` en cada operación del usuario, `replaceBoard` y manejo de errores HTTP.
+- Pruebas de integración E2E (`Playwright`, 8/8 en serie con reinicio de tablero en `beforeEach`) contra el contenedor Docker con SQLite real: iniciar sesión, renombrar una columna, crear una tarjeta, editar otra, eliminar una y arrastrar otra de columna; recargar la página (`page.reload()`) y cerrar/abrir sesión confirmando que todos los cambios persisten.
 
 ### Criterios de éxito
-- El tablero Kanban es 100% persistente entre recargas del navegador y reinicios del contenedor (gracias al volumen de datos en `scripts/`).
+- El tablero Kanban es 100% persistente entre recargas del navegador, cierres de sesión y reinicios del contenedor.
 
 ---
 
@@ -169,9 +184,9 @@ Configurar la integración del backend con Google Gemini (`gemini-3.8-flash`) us
 *(Nota: Se utiliza Google Gemini según lo establecido en `AGENTS.md` en lugar de OpenRouter).*
 
 ### Lista de verificación
-- [ ] 8.1 Consultar la documentación actualizada del SDK `google-genai` para `gemini-3.8-flash` (Interactions API y salidas estructuradas) antes de escribir el código.
-- [ ] 8.2 Añadir dependencia `google-genai` (>= `2.30.1`) en `backend/pyproject.toml` con `uv` y asegurar que `.env` se inyecte tanto en ejecución local como en el contenedor Docker.
-- [ ] 8.3 Crear `backend/app/ai.py` con cliente Gemini inicializado a partir de `GEMINI_API_KEY` y función de consulta simple con el modelo `gemini-3.8-flash`.
+- [x] 8.1 Consultar la documentación actualizada del SDK `google-genai` para `gemini-3.8-flash` (Interactions API y salidas estructuradas) antes de escribir el código.
+- [x] 8.2 Añadir dependencia `google-genai` (>= `2.30.1`) en `backend/pyproject.toml` con `uv` y asegurar que `.env` se inyecte tanto en ejecución local como en el contenedor Docker.
+- [x] 8.3 Crear `backend/app/ai.py` con cliente Gemini inicializado a partir de `GEMINI_API_KEY` y función de consulta simple con el modelo `gemini-3.8-flash`.
 
 ### Pruebas
 - Prueba unitaria en `backend/tests/test_ai_connectivity.py` mockeando el cliente del SDK para validar configuración de modelo (`gemini-3.8-flash`) y manejo de falta de API key.
