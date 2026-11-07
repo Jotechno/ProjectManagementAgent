@@ -1,9 +1,15 @@
-import { describe, it, expect } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { useKanban } from "@/hooks/useKanban";
 import { initialBoardData } from "@/data/initialData";
 
 describe("useKanban Hook - Pruebas Unitarias", () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
   it("debe inicializar el tablero con 5 columnas fijas y tarjetas de ejemplo", () => {
     const { result } = renderHook(() => useKanban());
 
@@ -163,5 +169,78 @@ describe("useKanban Hook - Pruebas Unitarias", () => {
     });
 
     expect(result.current.board).toBe(beforeBoard);
+  });
+
+  it("sincroniza con PUT /api/board en cada mutación y reporta error si falla la API", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => initialBoardData,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+      } as Response);
+    global.fetch = fetchMock;
+
+    const { result } = renderHook(() => useKanban());
+
+    act(() => {
+      result.current.renameColumn("col-1", "Backlog Sincronizado");
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/board",
+      expect.objectContaining({
+        method: "PUT",
+        credentials: "include",
+      })
+    );
+
+    act(() => {
+      result.current.deleteCard("col-1", "card-1");
+    });
+
+    await waitFor(() => {
+      expect(result.current.error).toBe(
+        "No se pudo guardar el tablero en el servidor."
+      );
+    });
+  });
+
+  it("permite cargar el tablero desde GET /api/board y reemplazarlo con replaceBoard", async () => {
+    const remoteBoard = {
+      ...initialBoardData,
+      columns: {
+        ...initialBoardData.columns,
+        "col-2": {
+          ...initialBoardData.columns["col-2"],
+          title: "Por Hacer Desde API",
+        },
+      },
+    };
+
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => remoteBoard,
+    } as Response);
+
+    const { result } = renderHook(() => useKanban());
+
+    await act(async () => {
+      await result.current.loadBoard();
+    });
+
+    expect(result.current.board.columns["col-2"].title).toBe(
+      "Por Hacer Desde API"
+    );
+
+    act(() => {
+      result.current.replaceBoard(initialBoardData);
+    });
+    expect(result.current.board.columns["col-2"].title).toBe("Por Hacer");
   });
 });

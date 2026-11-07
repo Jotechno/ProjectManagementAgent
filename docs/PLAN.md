@@ -147,12 +147,12 @@ Implementar la capa SQLite con creación automática de base de datos y las ruta
 Conectar el frontend con la API del backend para que todas las operaciones sobre el tablero Kanban sean persistentes en SQLite.
 
 ### Lista de verificación
-- [ ] 7.1 Crear módulo cliente `frontend/src/lib/api.ts` con funciones tipadas para autenticación (`login`, `logout`, `getMe`) y tablero (`fetchBoard`, `saveBoard`).
-- [ ] 7.2 Actualizar `frontend/src/hooks/useKanban.ts` para:
+- [x] 7.1 Crear módulo cliente `frontend/src/lib/api.ts` con funciones tipadas para autenticación (`login`, `logout`, `getMe`) y tablero (`fetchBoard`, `saveBoard`).
+- [x] 7.2 Actualizar `frontend/src/hooks/useKanban.ts` para:
   - Cargar el tablero inicial desde `GET /api/board` al autenticarse.
   - Aplicar actualizaciones optimistas en las acciones `renameColumn`, `addCard`, `editCard`, `deleteCard` y `moveCard`, persistiendo cada cambio mediante `PUT /api/board`.
   - Exponer `replaceBoard(newBoard)` para actualizaciones externas (como respuestas de IA en la Parte 10), estado `isLoading` y mensaje `error` en caso de fallo de red.
-- [ ] 7.3 Mostrar estado de carga limpio y aviso discreto si ocurre un error de sincronización en `Board.tsx`.
+- [x] 7.3 Mostrar estado de carga limpio y aviso discreto si ocurre un error de sincronización en `Board.tsx`.
 
 ### Pruebas
 - Pruebas unitarias de frontend (`Vitest`): mockear llamadas `fetch` a `/api/board` verificando carga inicial, disparo de `PUT /api/board` en cada operación del usuario y manejo de errores HTTP.

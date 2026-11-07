@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { DragDropContext, DropResult } from "@hello-pangea/dnd";
 import { useKanban } from "@/hooks/useKanban";
-import { Card } from "@/types/kanban";
+import { BoardData, Card } from "@/types/kanban";
+import { initialBoardData } from "@/data/initialData";
 import { Header } from "@/components/Header";
 import { Column } from "@/components/Column";
 import { NewCardModal } from "@/components/NewCardModal";
@@ -11,11 +12,23 @@ import { NewCardModal } from "@/components/NewCardModal";
 interface BoardProps {
   username?: string;
   onLogout?: () => void;
+  initialBoard?: BoardData;
 }
 
-export function Board({ username, onLogout }: BoardProps = {}) {
-  const { board, renameColumn, addCard, editCard, deleteCard, moveCard } =
-    useKanban();
+export function Board({
+  username,
+  onLogout,
+  initialBoard = initialBoardData,
+}: BoardProps = {}) {
+  const {
+    board,
+    error,
+    renameColumn,
+    addCard,
+    editCard,
+    deleteCard,
+    moveCard,
+  } = useKanban(initialBoard);
   const [activeModalColumnId, setActiveModalColumnId] = useState<string | null>(
     null
   );
@@ -47,6 +60,18 @@ export function Board({ username, onLogout }: BoardProps = {}) {
         username={username}
         onLogout={onLogout}
       />
+
+      {error && (
+        <div
+          data-testid="board-sync-error"
+          role="alert"
+          className="max-w-[1600px] w-full mx-auto mt-4 px-6"
+        >
+          <div className="px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 text-xs font-medium text-red-700">
+            {error}
+          </div>
+        </div>
+      )}
 
       <main className="flex-1 max-w-[1600px] w-full mx-auto px-6 py-6 overflow-x-auto">
         {mounted ? (

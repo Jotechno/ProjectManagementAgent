@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import HomePage from "@/app/page";
+import { initialBoardData } from "@/data/initialData";
 
 describe("Flujo de Autenticación - Pruebas Unitarias", () => {
   const originalFetch = global.fetch;
@@ -28,7 +29,18 @@ describe("Flujo de Autenticación - Pruebas Unitarias", () => {
     expect(screen.queryByTestId("kanban-board")).not.toBeInTheDocument();
   });
 
-  it("muestra mensaje de error con credenciales inválidas y accede al tablero con credenciales válidas", async () => {
+  it("muestra mensaje de error con credenciales inválidas y carga el tablero persistido al iniciar sesión", async () => {
+    const customBoard = {
+      ...initialBoardData,
+      columns: {
+        ...initialBoardData.columns,
+        "col-1": {
+          ...initialBoardData.columns["col-1"],
+          title: "Backlog Remoto",
+        },
+      },
+    };
+
     global.fetch = vi
       .fn()
       // GET /api/auth/me inicial -> 401
@@ -44,6 +56,12 @@ describe("Flujo de Autenticación - Pruebas Unitarias", () => {
         ok: true,
         status: 200,
         json: async () => ({ username: "user" }),
+      } as Response)
+      // GET /api/board tras login -> 200
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => customBoard,
       } as Response)
       // POST /api/auth/logout -> 200
       .mockResolvedValueOnce({
@@ -81,6 +99,9 @@ describe("Flujo de Autenticación - Pruebas Unitarias", () => {
       expect(screen.getByTestId("kanban-board")).toBeInTheDocument();
     });
     expect(screen.getByTestId("logged-in-user")).toHaveTextContent("user");
+    expect(screen.getByTestId("column-title-col-1")).toHaveTextContent(
+      "Backlog Remoto"
+    );
 
     fireEvent.click(screen.getByTestId("logout-btn"));
 
@@ -89,4 +110,3 @@ describe("Flujo de Autenticación - Pruebas Unitarias", () => {
     });
   });
 });
-

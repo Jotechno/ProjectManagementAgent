@@ -3,29 +3,31 @@
 import { useEffect, useState } from "react";
 import { Board } from "@/components/Board";
 import { LoginForm } from "@/components/LoginForm";
+import { BoardData } from "@/types/kanban";
+import { initialBoardData } from "@/data/initialData";
+import { fetchBoard, getMe, login, logout } from "@/lib/api";
 
 export default function HomePage() {
   const [username, setUsername] = useState<string | null>(null);
+  const [userBoard, setUserBoard] = useState<BoardData>(initialBoardData);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     let active = true;
-    fetch("/api/auth/me", { credentials: "include" })
-      .then(async (res) => {
+    (async () => {
+      try {
+        const user = await getMe();
+        if (!active || !user) return;
+        const remoteBoard = await fetchBoard().catch(() => initialBoardData);
         if (!active) return;
-        if (res.ok) {
-          const data = await res.json();
-          setUsername(data.username);
-        }
-      })
-      .catch(() => {
-        // Sin sesión activa
-      })
-      .finally(() => {
+        setUserBoard(remoteBoard);
+        setUsername(user.username);
+      } finally {
         if (active) setCheckingAuth(false);
-      });
+      }
+    })();
 
     return () => {
       active = false;
@@ -36,33 +38,23 @@ export default function HomePage() {
     setIsSubmitting(true);
     setAuthError(null);
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ username: user, password }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        setAuthError(errData?.detail || "Usuario o contraseña incorrectos.");
-        return;
-      }
-
-      const data = await res.json();
-      setUsername(data.username);
-    } catch {
-      setAuthError("No fue posible conectar con el servidor.");
+      const loggedUser = await login(user, password);
+      const remoteBoard = await fetchBoard().catch(() => initialBoardData);
+      setUserBoard(remoteBoard);
+      setUsername(loggedUser.username);
+    } catch (err: unknown) {
+      setAuthError(
+        err instanceof Error
+          ? err.message
+          : "No fue posible conectar con el servidor."
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", {
-      method: "POST",
-      credentials: "include",
-    }).catch(() => null);
+    await logout();
     setUsername(null);
   };
 
@@ -87,5 +79,11 @@ export default function HomePage() {
     );
   }
 
-  return <Board username={username} onLogout={handleLogout} />;
+  return (
+    <Board
+      username={username}
+      onLogout={handleLogout}
+      initialBoard={userBoard}
+    />
+  );
 }

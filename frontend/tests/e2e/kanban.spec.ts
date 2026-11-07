@@ -1,7 +1,16 @@
 import { test, expect } from "@playwright/test";
+import { initialBoardData } from "../../src/data/initialData";
 
 test.describe("Tablero Kanban MVP - Pruebas de Integración E2E", () => {
   test.beforeEach(async ({ page }) => {
+    await page.request.post("/api/auth/login", {
+      data: { username: "user", password: "password" },
+    });
+    await page.request.put("/api/board", {
+      data: initialBoardData,
+    });
+    await page.request.post("/api/auth/logout");
+
     await page.goto("/");
     await expect(page.getByTestId("login-form")).toBeVisible();
     await page.getByTestId("login-username-input").fill("user");
@@ -132,7 +141,6 @@ test.describe("Tablero Kanban MVP - Pruebas de Integración E2E", () => {
     await expect(page.getByTestId("column-count-col-1")).toHaveText("2");
     await expect(page.getByTestId("column-count-col-2")).toHaveText("2");
 
-    // Drag and drop usando mouse
     const cardBox = await card1.boundingBox();
     const targetBox = await col2Droppable.boundingBox();
 
@@ -160,5 +168,79 @@ test.describe("Tablero Kanban MVP - Pruebas de Integración E2E", () => {
     await expect(page.getByTestId("column-count-col-1")).toHaveText("1");
     await expect(page.getByTestId("column-count-col-2")).toHaveText("3");
     await expect(col2Droppable.getByTestId("card-card-1")).toBeVisible();
+  });
+
+  test("debe persistir en SQLite los cambios de columnas y tarjetas tras recargar y reautenticar", async ({
+    page,
+  }) => {
+    // 1. Renombrar columna col-1
+    const putRename = page.waitForResponse(
+      (res) => res.url().includes("/api/board") && res.request().method() === "PUT"
+    );
+    await page.getByTestId("edit-column-col-1").click();
+    await page.getByTestId("column-input-col-1").fill("Backlog Persistente");
+    await page.getByTestId("save-column-col-1").click();
+    await putRename;
+
+    // 2. Crear nueva tarjeta en col-2
+    const putAdd = page.waitForResponse(
+      (res) => res.url().includes("/api/board") && res.request().method() === "PUT"
+    );
+    await page.getByTestId("add-card-btn-col-2").click();
+    await page.getByTestId("new-card-title-input").fill("Tarea guardada en SQLite");
+    await page
+      .getByTestId("new-card-details-input")
+      .fill("Persistencia verificada extremo a extremo.");
+    await page.getByTestId("submit-card-btn").click();
+    await putAdd;
+
+    // 3. Editar tarjeta card-5
+    const putEdit = page.waitForResponse(
+      (res) => res.url().includes("/api/board") && res.request().method() === "PUT"
+    );
+    await page.getByTestId("edit-card-card-5").click();
+    await page.getByTestId("edit-card-title-input").fill("Kanban conectado a SQLite");
+    await page.getByTestId("submit-edit-card-btn").click();
+    await putEdit;
+
+    // 4. Eliminar tarjeta card-7
+    const putDelete = page.waitForResponse(
+      (res) => res.url().includes("/api/board") && res.request().method() === "PUT"
+    );
+    await page.getByTestId("delete-card-card-7").click();
+    await putDelete;
+
+    // Verificar persistencia tras recargar página
+    await page.reload();
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+    await expect(page.getByTestId("column-title-col-1")).toHaveText(
+      "Backlog Persistente"
+    );
+    await expect(page.getByTestId("droppable-col-2")).toContainText(
+      "Tarea guardada en SQLite"
+    );
+    await expect(page.getByTestId("card-title-card-5")).toHaveText(
+      "Kanban conectado a SQLite"
+    );
+    await expect(page.getByTestId("card-card-7")).not.toBeVisible();
+
+    // Verificar persistencia tras cerrar sesión y volver a entrar
+    await page.getByTestId("logout-btn").click();
+    await expect(page.getByTestId("login-form")).toBeVisible();
+    await page.getByTestId("login-username-input").fill("user");
+    await page.getByTestId("login-password-input").fill("password");
+    await page.getByTestId("login-submit-btn").click();
+
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+    await expect(page.getByTestId("column-title-col-1")).toHaveText(
+      "Backlog Persistente"
+    );
+    await expect(page.getByTestId("droppable-col-2")).toContainText(
+      "Tarea guardada en SQLite"
+    );
+    await expect(page.getByTestId("card-title-card-5")).toHaveText(
+      "Kanban conectado a SQLite"
+    );
+    await expect(page.getByTestId("card-card-7")).not.toBeVisible();
   });
 });

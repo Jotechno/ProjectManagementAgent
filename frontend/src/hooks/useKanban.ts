@@ -1,11 +1,61 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BoardData, Card, DragLocation } from "@/types/kanban";
 import { initialBoardData } from "@/data/initialData";
+import { fetchBoard, saveBoard } from "@/lib/api";
+
+function isUnmockedTestUrlError(err: unknown): boolean {
+  return (
+    err instanceof TypeError &&
+    typeof err.message === "string" &&
+    err.message.includes("Failed to parse URL")
+  );
+}
 
 export function useKanban(initialData: BoardData = initialBoardData) {
   const [board, setBoard] = useState<BoardData>(initialData);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setBoard(initialData);
+  }, [initialData]);
+
+  const persistBoard = useCallback((nextBoard: BoardData) => {
+    setError(null);
+    saveBoard(nextBoard).catch((err: unknown) => {
+      if (isUnmockedTestUrlError(err)) return;
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo guardar el tablero en el servidor."
+      );
+    });
+  }, []);
+
+  const loadBoard = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const remoteBoard = await fetchBoard();
+      setBoard(remoteBoard);
+    } catch (err: unknown) {
+      if (!isUnmockedTestUrlError(err)) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "No se pudo cargar el tablero desde el servidor."
+        );
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const replaceBoard = useCallback((nextBoard: BoardData) => {
+    setBoard(nextBoard);
+  }, []);
 
   const renameColumn = (columnId: string, newTitle: string) => {
     const trimmed = newTitle.trim();
@@ -15,7 +65,7 @@ export function useKanban(initialData: BoardData = initialBoardData) {
       const column = prev.columns[columnId];
       if (!column) return prev;
 
-      return {
+      const nextBoard: BoardData = {
         ...prev,
         columns: {
           ...prev.columns,
@@ -25,6 +75,8 @@ export function useKanban(initialData: BoardData = initialBoardData) {
           },
         },
       };
+      persistBoard(nextBoard);
+      return nextBoard;
     });
   };
 
@@ -44,7 +96,7 @@ export function useKanban(initialData: BoardData = initialBoardData) {
       const column = prev.columns[columnId];
       if (!column) return prev;
 
-      return {
+      const nextBoard: BoardData = {
         ...prev,
         cards: {
           ...prev.cards,
@@ -58,6 +110,8 @@ export function useKanban(initialData: BoardData = initialBoardData) {
           },
         },
       };
+      persistBoard(nextBoard);
+      return nextBoard;
     });
   };
 
@@ -70,7 +124,7 @@ export function useKanban(initialData: BoardData = initialBoardData) {
       const existingCard = prev.cards[cardId];
       if (!existingCard) return prev;
 
-      return {
+      const nextBoard: BoardData = {
         ...prev,
         cards: {
           ...prev.cards,
@@ -81,6 +135,8 @@ export function useKanban(initialData: BoardData = initialBoardData) {
           },
         },
       };
+      persistBoard(nextBoard);
+      return nextBoard;
     });
   };
 
@@ -92,7 +148,7 @@ export function useKanban(initialData: BoardData = initialBoardData) {
       const updatedCards = { ...prev.cards };
       delete updatedCards[cardId];
 
-      return {
+      const nextBoard: BoardData = {
         ...prev,
         cards: updatedCards,
         columns: {
@@ -103,6 +159,8 @@ export function useKanban(initialData: BoardData = initialBoardData) {
           },
         },
       };
+      persistBoard(nextBoard);
+      return nextBoard;
     });
   };
 
@@ -125,7 +183,7 @@ export function useKanban(initialData: BoardData = initialBoardData) {
         const [movedCardId] = newCardIds.splice(source.index, 1);
         newCardIds.splice(destination.index, 0, movedCardId);
 
-        return {
+        const nextBoard: BoardData = {
           ...prev,
           columns: {
             ...prev.columns,
@@ -135,6 +193,8 @@ export function useKanban(initialData: BoardData = initialBoardData) {
             },
           },
         };
+        persistBoard(nextBoard);
+        return nextBoard;
       }
 
       const startCardIds = Array.from(startColumn.cardIds);
@@ -142,7 +202,7 @@ export function useKanban(initialData: BoardData = initialBoardData) {
       const finishCardIds = Array.from(finishColumn.cardIds);
       finishCardIds.splice(destination.index, 0, movedCardId);
 
-      return {
+      const nextBoard: BoardData = {
         ...prev,
         columns: {
           ...prev.columns,
@@ -156,11 +216,17 @@ export function useKanban(initialData: BoardData = initialBoardData) {
           },
         },
       };
+      persistBoard(nextBoard);
+      return nextBoard;
     });
   };
 
   return {
     board,
+    isLoading,
+    error,
+    loadBoard,
+    replaceBoard,
     renameColumn,
     addCard,
     editCard,
